@@ -1,0 +1,142 @@
+sealed trait TaskStatus // базовий тип статусу; нащадки можуть бути лише в цьому файлі
+object ToDo       extends TaskStatus { override def toString = "ToDo" }       // звичайний object (без case): єдиний екземпляр статусу ToDo
+object InProgress extends TaskStatus { override def toString = "InProgress" } // єдиний екземпляр статусу InProgress
+object Done       extends TaskStatus { override def toString = "Done" }       // єдиний екземпляр статусу Done
+
+
+class TeamMember(val id: Int, val name: String, val role: String) { // val у параметрах створює публічні поля id, name, role
+  def info(): String = s"Учасник #$id: $name (роль: $role)"          // повертає рядок з інформацією про учасника
+  def printInfo(): Unit = println(info())                            // виводить інформацію в консоль
+}                                                                    // кінець класу TeamMember
+
+class Task(val id: Int, val title: String, val description: String) { // клас Task: id, назва, опис
+  private var _status: TaskStatus = ToDo                             // приватний статус; початково ToDo
+  private var _assignee: Option[TeamMember] = None                   // приватний виконавець; None — ще не призначено
+
+  def status: TaskStatus = _status                                   // геттер статусу (лише читання ззовні)
+  def assignee: Option[TeamMember] = _assignee                       // геттер виконавця
+
+  def assignTo(member: TeamMember): Unit = _assignee = Some(member)  // призначає виконавця, обгортаючи його в Some
+
+  def changeStatus(newStatus: TaskStatus): Unit = _status = newStatus // змінює статус на новий
+
+  def info(): String = {                                             // формує рядок з інформацією про завдання
+    val who = assignee.map(_.name).getOrElse("не призначено")        // ім'я виконавця, якщо він є, інакше текст за замовчуванням
+    s"Завдання #$id: $title | $description | статус: $status | виконавець: $who" // результат методу
+  }                                                                  // кінець info
+  def printInfo(): Unit = println(info())                            // виводить інформацію про завдання
+}                                                                    // кінець класу Task
+
+class Project(val name: String, val description: String) {           // клас Project: назва та опис
+  private var _members: List[TeamMember] = List.empty                // приватний список учасників
+  private var _tasks: List[Task] = List.empty                        // приватний список завдань
+
+  def members: List[TeamMember] = _members                           // геттер учасників
+  def tasks: List[Task] = _tasks                                     // геттер завдань
+
+  def addMember(member: TeamMember): Boolean =                       // додає учасника; true — додано, false — дублікат
+    if (_members.exists(_.id == member.id)) {                        // чи є вже учасник з таким id
+      println(s"Помилка: учасник з id=${member.id} вже існує")       // повідомлення про дублікат
+      false                                                          // не додаємо
+    } else {                                                         // id унікальний
+      _members = _members :+ member                                  // додаємо в кінець нового списку
+      true                                                           // успіх
+    }                                                                // кінець if/else
+
+  def addTask(task: Task): Boolean =                                 // додає завдання; true — додано, false — дублікат
+    if (_tasks.exists(_.id == task.id)) {                            // чи є вже завдання з таким id
+      println(s"Помилка: завдання з id=${task.id} вже існує")        // повідомлення про дублікат
+      false                                                          // не додаємо
+    } else {                                                         // id унікальний
+      _tasks = _tasks :+ task                                        // додаємо в кінець нового списку
+      true                                                           // успіх
+    }                                                                // кінець if/else
+
+  def findTask(id: Int): Option[Task] = _tasks.find(_.id == id)      // Some(завдання) для першого збігу або None
+
+  def tasksOfMember(memberId: Int): List[Task] =                     // завдання конкретного учасника
+    _tasks.filter(_.assignee.exists(_.id == memberId))               // лишаємо ті, де виконавець є і його id збігається
+
+  def tasksByStatus(status: TaskStatus): List[Task] =                // завдання із заданим статусом
+    _tasks.filter(_.status == status)                                // лишаємо завдання з потрібним статусом
+
+  def progress: Double =                                             // прогрес проєкту у відсотках
+    if (_tasks.isEmpty) 0.0                                          // немає завдань — 0%
+    else _tasks.count(_.status == Done).toDouble / _tasks.size * 100 // частка Done від усіх, помножена на 100
+
+  def info(): String = s"Проєкт \"$name\": $description"             // рядок з інформацією про проєкт
+}                                                                    // кінець класу Project
+
+object HelloWorld {                                                        // синглтон з точкою входу
+  def main(args: Array[String]): Unit = {                            // звідси починається виконання
+    val project = new Project("Інтернет-магазин", "Розробка вебмагазину для продажу книг") // створюємо проєкт
+    println(project.info())                                          // виводимо інформацію про проєкт
+
+    // Учасники (3)
+    val alice = new TeamMember(1, "Олена", "Розробник")              // перший учасник
+    val bob   = new TeamMember(2, "Андрій", "Тестувальник")          // другий учасник
+    val carol = new TeamMember(3, "Марія", "Дизайнер")               // третій учасник
+    List(alice, bob, carol).foreach(project.addMember)               // додаємо учасників у проєкт
+    project.addMember(new TeamMember(1, "Дублікат", "Тест"))         // дублікат id=1 — буде помилка
+
+    println("\n=== Учасники команди ===")                            // заголовок розділу
+    project.members.foreach(_.printInfo())                           // виводимо учасників
+
+    // Завдання (5)
+    val t1 = new Task(1, "Макет сайту", "Створити дизайн головної сторінки") // завдання 1
+    val t2 = new Task(2, "Каталог товарів", "Реалізувати сторінку каталогу") // завдання 2
+    val t3 = new Task(3, "Кошик", "Додати функціонал кошика")        // завдання 3
+    val t4 = new Task(4, "Тестування", "Написати тест-кейси")        // завдання 4
+    val t5 = new Task(5, "Оплата", "Інтегрувати платіжну систему")   // завдання 5
+    List(t1, t2, t3, t4, t5).foreach(project.addTask)                // додаємо завдання у проєкт
+    project.addTask(new Task(3, "Дублікат", "Тест"))                 // дублікат id=3 — буде помилка
+
+    println("\n=== Усі завдання (початковий стан) ===")              // заголовок розділу
+    project.tasks.foreach(_.printInfo())                             // усі завдання: ToDo, без виконавців
+    println(f"Прогрес проєкту: ${project.progress}%.1f%%")           // форматований прогрес (%.1f — один знак, %% — символ %)
+
+    // Призначення виконавців
+    println("\n=== Призначення виконавців ===")                      // заголовок розділу
+    t1.assignTo(carol)                                               // Марія виконує завдання 1
+    t2.assignTo(alice)                                               // Олена виконує завдання 2
+    t3.assignTo(alice)                                               // Олена виконує завдання 3
+    t4.assignTo(bob)                                                 // Андрій виконує завдання 4
+    // t5 лишається без виконавця                                    // демонстрація None
+    project.tasks.foreach(_.printInfo())                             // виводимо завдання після призначення
+
+    // Зміна статусів
+    println("\n=== Зміна статусів ===")                              // заголовок розділу
+    t1.changeStatus(Done)                                            // завдання 1 завершено
+    t2.changeStatus(InProgress)                                      // завдання 2 у процесі
+    t3.changeStatus(Done)                                            // завдання 3 завершено
+    t4.changeStatus(InProgress)                                      // завдання 4 у процесі
+    project.tasks.foreach(_.printInfo())                             // виводимо завдання після зміни статусів
+
+    // Пошук за ідентифікатором (без match: через map + getOrElse)
+    println("\n=== Пошук завдання за id ===")                        // заголовок розділу
+    val found = project.findTask(2)                                  // шукаємо завдання з id=2 (результат — Option)
+    println(found.map(t => "Знайдено: " + t.info()).getOrElse("Завдання не знайдено")) // якщо Some — формуємо текст, якщо None — запасний текст
+    val missing = project.findTask(99)                               // шукаємо неіснуючий id=99
+    println(missing.map(t => "Знайдено: " + t.info()).getOrElse("Завдання з id=99 не знайдено")) // тут буде None, тому спрацює getOrElse
+
+    // Завдання певного учасника
+    println(s"\n=== Завдання учасника ${alice.name} ===")            // заголовок з ім'ям
+    project.tasksOfMember(alice.id).foreach(_.printInfo())           // завдання Олени
+
+    // Фільтрація за статусом
+    println("\n=== Фільтрація за статусом ===")                      // заголовок розділу
+    List[TaskStatus](ToDo, InProgress, Done).foreach { st =>         // перебираємо всі три статуси
+      println(s"-- $st --")                                          // назва поточного статусу
+      val list = project.tasksByStatus(st)                           // завдання з цим статусом
+      if (list.isEmpty) println("(немає завдань)") else list.foreach(_.printInfo()) // порожньо — повідомлення, інакше виводимо завдання
+    }                                                                // кінець перебору статусів
+
+    // Прогрес
+    println("\n=== Прогрес проєкту ===")                             // заголовок розділу
+    println(f"Виконано: ${project.progress}%.1f%%")                  // 2 із 5 завдань Done → 40.0%
+
+    // Порожній проєкт: прогрес 0%
+    val empty = new Project("Порожній", "Без завдань")               // проєкт без завдань
+    println(f"Прогрес порожнього проєкту: ${empty.progress}%.1f%%")  // виводимо 0.0%
+  }                                                                  // кінець main
+}                                                                    // кінець Main
